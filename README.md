@@ -1,59 +1,166 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Keuangan MCM
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi pencatatan dan pengelolaan transaksi keuangan perusahaan berbasis Laravel.
 
-## About Laravel
+## Fitur
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Pencatatan transaksi keuangan
+- Sumber dana
+- Tujuan transaksi
+- Nomor bukti transaksi otomatis
+- Upload bukti transaksi
+- Daftar transaksi
+- Hapus transaksi
+- Pencatatan kas kantor
+- Pencatatan transaksi langsung dari bos
+- Perhitungan saldo kas berdasarkan transaksi
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Teknologi
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Laravel
+- PHP
+- MySQL
+- Bootstrap
+- Vite
+- JavaScript
 
-## Learning Laravel
+## Instalasi
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Clone repository:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+    git clone <URL_REPOSITORY>
+    cd keuangan_mcm
 
-## Laravel Sponsors
+Install dependency PHP:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+    composer install
 
-### Premium Partners
+Install dependency JavaScript:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+    npm install
 
-## Contributing
+Salin file environment:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+    cp .env.example .env
 
-## Code of Conduct
+Generate application key:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    php artisan key:generate
 
-## Security Vulnerabilities
+Atur konfigurasi database pada file .env:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+    DB_DATABASE=keuangan_mcm
+    DB_USERNAME=root
+    DB_PASSWORD=
+
+Jalankan migration:
+
+    php artisan migrate
+
+Buat symbolic link storage:
+
+    php artisan storage:link
+
+Build asset:
+
+    npm run build
+
+## Menjalankan Development
+
+Jalankan Laravel:
+
+    php artisan serve
+
+Untuk development frontend:
+
+    npm run dev
+
+## Struktur Utama
+
+    app/
+    ├── Http/
+    │   └── Controllers/
+    └── Models/
+
+    database/
+    ├── migrations/
+    └── seeders/
+
+    resources/
+    └── views/
+
+    routes/
+    └── web.php
+
+    storage/
+    └── app/
+
+## Konsep Transaksi
+
+Aplikasi menggunakan dua sumber dana utama:
+
+- Bos
+- Kas Kantor
+
+### Bos → Kas Kantor
+
+Dana masuk ke kas kantor.
+
+Saldo Kas Kantor bertambah dan transaksi ini bukan merupakan pengeluaran.
+
+### Kas Kantor → Tujuan
+
+Dana keluar dari kas kantor.
+
+Saldo Kas Kantor berkurang dan transaksi dicatat sebagai pengeluaran.
+
+### Bos → Tujuan
+
+Bos melakukan pembayaran secara langsung.
+
+Transaksi tidak menambah saldo Kas Kantor, tetapi tetap dicatat sebagai pengeluaran perusahaan.
+
+## Bukti Transaksi
+
+Bukti transaksi berupa gambar disimpan pada:
+
+    storage/app/public/bukti-transaksi/
+
+File bukti menggunakan kode transaksi sebagai nama file, misalnya:
+
+    BPU001.jpg
+    BPU002.png
+
+## Nomor Bukti
+
+Nomor bukti transaksi menggunakan format:
+
+    BPU001
+    BPU002
+    BPU003
+
+Nomor akan dimulai kembali dari BPU001 pada bulan berikutnya.
+
+## Database
+
+Tabel utama:
+
+- sumber_dana
+- tujuan_transaksi
+- transaksi
+
+## Environment
+
+File berikut tidak disimpan dalam repository:
+
+- .env
+- vendor/
+- node_modules/
+- public/build/
+- public/storage/
+
+Pastikan konfigurasi database dan environment sudah benar sebelum menjalankan migration.
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Private / Internal Use
