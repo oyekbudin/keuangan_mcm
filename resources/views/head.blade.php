@@ -8,10 +8,14 @@
     <meta name="robots" content="noindex, nofollow">
     <meta name="description" content="AppDashboard - Bootstrap Admin Dashboard Template">
     <meta name="keywords" content="admin, dashboard, bootstrap">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
 
     <!-- Favicons -->
     <link href="images/favicon.png" rel="icon">
     <link href="images/apple-touch-icon.png" rel="apple-touch-icon">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

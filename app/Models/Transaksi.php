@@ -4,9 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-use App\Models\SumberDana;
-use App\Models\TujuanTransaksi;
-
 class Transaksi extends Model
 {
     protected $table = 'transaksi';
@@ -19,6 +16,7 @@ class Transaksi extends Model
         'nominal',
         'keterangan',
         'bukti',
+        'bukti_nota',
     ];
 
     protected $casts = [
@@ -27,11 +25,11 @@ class Transaksi extends Model
 
     public function sumberDana()
     {
-        return $this->belongsTo(SumberDana::class, 'id_sumber_dana');
+        return $this->belongsTo(Akun::class, 'id_sumber_dana');
     }
 
     public function tujuanTransaksi()
     {
-        return $this->belongsTo(TujuanTransaksi::class, 'id_tujuan_transaksi');
+        return $this->belongsTo(Akun::class, 'id_tujuan_transaksi');
     }
 }

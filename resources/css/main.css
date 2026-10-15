@@ -32307,3 +32307,15 @@ textarea.form-control {
     display: block;
   }
 }
+
+
+
+#nominal::-webkit-inner-spin-button,
+#nominal::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#nominal {
+  -moz-appearance: textfield;
+}

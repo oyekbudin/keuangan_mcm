@@ -20,11 +20,36 @@
     <nav class="sidebar-nav">
         <ul class="nav-menu">
             <li class="nav-item">
-                <a class="nav-link active" href="index.html">
+                <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}"
+                    href="{{ route('dashboard') }}">
                     <i class="bi bi-arrow-left-right"></i>
                     <span>Transaksi</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('laporan.index') ? 'active' : '' }}"
+                    href="{{ route('laporan.index') }}">
+                    <i class="bi bi-file-earmark-bar-graph"></i>
+                    <span>Laporan</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('import-transaksi.*') ? 'active' : '' }}"
+                    href="{{ route('import-transaksi.index') }}">
+                    <i class="bi bi-file-earmark-spreadsheet"></i>
+                    <span>Import</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {{ request()->routeIs('import-drafts.*') ? 'active' : '' }}"
+                    href="{{ route('import-drafts.index') }}">
+                    <i class="bi bi-arrow-left-right"></i>
+                    <span>Rekonsiliasi</span>
+                </a>
+            </li>
+
+           
+
             <li class="nav-item">
                 <a class="nav-link" href="index.html">
                     <i class="bi bi-gear"></i>

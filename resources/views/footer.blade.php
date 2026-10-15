@@ -33,6 +33,74 @@
         </footer-->
 </main>
 
+<style>
+    /* Animasi saat toast muncul */
+    .toastify.toast-animasi {
+        animation: toastMasuk 0.4s ease-out both;
+    }
+
+    /* Animasi saat toast ditutup */
+    .toastify.toast-animasi.toast-keluar {
+        animation: toastKeluar 0.3s ease-in both;
+    }
+
+    @keyframes toastMasuk {
+        from {
+            opacity: 0;
+            transform: translate3d(40px, 0, 0);
+        }
+
+        to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+        }
+    }
+
+    @keyframes toastKeluar {
+        from {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+        }
+
+        to {
+            opacity: 0;
+            transform: translate3d(40px, 0, 0);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+        .toastify.toast-animasi,
+        .toastify.toast-animasi.toast-keluar {
+            animation: none;
+        }
+    }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+@if (session('success'))
+<script>
+    Toastify({
+        text: @json(session('success')),
+        duration: 3500,
+        close: true,
+        gravity: "top",
+        position: "right",
+        stopOnFocus: true,
+        className: "toast-animasi",
+        style: {
+            background: "linear-gradient(to right, #00b09b, #96c93d)",
+            borderRadius: "8px"
+        },
+        callback: function () {
+            // Toast sudah selesai ditampilkan.
+        }
+    }).showToast();
+</script>
+@endif
+
+
 <!-- Back to Top -->
 <a href="#" class="back-to-top">
     <i class="bi bi-arrow-up"></i>
@@ -682,6 +750,14 @@
                 displayImagePreviews(this.files, imagePreview2);
             });
         }
+        // Image preview for dropzone2
+        const dropzoneInputNota = document.getElementById('dropzoneInputNota');
+        const imagePreviewNota = document.getElementById('imagePreviewNota');
+        if (dropzoneInputNota && imagePreviewNota) {
+            dropzoneInputNota.addEventListener('change', function() {
+                displayImagePreviews(this.files, imagePreviewNota);
+            });
+        }
         // File list for dropzone3
         const dropzoneInput3 = document.getElementById('dropzoneInput3');
         const fileList3 = document.getElementById('fileList3');
@@ -827,9 +903,9 @@
           </button>
         `;
                     item.querySelector('.upload-image-remove').addEventListener('click',
-                function() {
-                        item.remove();
-                    });
+                        function() {
+                            item.remove();
+                        });
                     container.appendChild(item);
                 };
                 reader.readAsDataURL(file);
@@ -841,7 +917,7 @@
             if (type === 'application/pdf') return 'bi-file-earmark-pdf text-danger';
             if (type.includes('word')) return 'bi-file-earmark-word text-info';
             if (type.includes('excel') || type.includes('spreadsheet'))
-            return 'bi-file-earmark-excel text-success';
+                return 'bi-file-earmark-excel text-success';
             if (type.includes('zip') || type.includes('rar')) return 'bi-file-earmark-zip text-warning';
             if (type.startsWith('video/')) return 'bi-file-earmark-play text-purple';
             if (type.startsWith('audio/')) return 'bi-file-earmark-music text-pink';
@@ -868,6 +944,562 @@
         });
     });
 </script>
+
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const forms = document.querySelectorAll('.reconciliation-form');
+
+        function formatRupiah(angka) {
+            return 'Rp' + Number(angka || 0).toLocaleString('id-ID');
+        }
+
+        function getNominal(card) {
+            const input = card.querySelector('.nominal-input');
+            return Number(input ? input.value : card.dataset.nominal) || 0;
+        }
+
+        // EDIT CARD EXCEL
+        document.querySelectorAll('.reconciliation-excel-row .edit-row-btn')
+            .forEach(button => {
+                button.addEventListener('click', function() {
+                    const card = this.closest('.reconciliation-excel-row');
+                    if (!card) return;
+
+                    card.querySelectorAll('.excel-edit-field').forEach(field => {
+                        field.removeAttribute('readonly');
+                    });
+
+                    this.classList.add('d-none');
+                    card.querySelector('.save-row-btn')?.classList.remove('d-none');
+                });
+            });
+
+        // SELESAI EDIT: KEMBALI KE READONLY
+        document.querySelectorAll('.reconciliation-excel-row .save-row-btn')
+            .forEach(button => {
+                button.addEventListener('click', function() {
+                    const card = this.closest('.reconciliation-excel-row');
+                    if (!card) return;
+
+                    card.querySelectorAll('.excel-edit-field').forEach(field => {
+                        field.setAttribute('readonly', 'readonly');
+                    });
+
+                    this.classList.add('d-none');
+                    card.querySelector('.edit-row-btn')?.classList.remove('d-none');
+
+                    updateNominal(card);
+                    updateAllSummaries();
+                    highlightNominalMatches();
+                });
+            });
+
+        // SINKRONKAN NOMINAL TERBARU
+        function updateNominal(card) {
+            if (!card) return;
+
+            const nominal = getNominal(card);
+            card.dataset.nominal = nominal;
+
+            const checkbox = card.querySelector('.reconciliation-checkbox');
+            if (checkbox) {
+                checkbox.dataset.nominal = nominal;
+            }
+        }
+
+        document.querySelectorAll('.nominal-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const card = this.closest('.reconciliation-excel-row');
+
+                updateNominal(card);
+                updateAllSummaries();
+                highlightNominalMatches();
+            });
+        });
+
+        // RINGKASAN TOTAL DAN STATUS HEADER
+        function updateSummary(form) {
+            const checkboxes = form.querySelectorAll('.reconciliation-checkbox');
+            const countElement = form.querySelector('.selected-count');
+            const totalElement = form.querySelector('.selected-total');
+            const summary = form.querySelector('.reconciliation-summary');
+
+            if (!summary || !countElement || !totalElement) return;
+
+            let jumlah = 0;
+            let total = 0;
+
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    jumlah++;
+                    total += Number(checkbox.dataset.nominal || 0);
+                }
+            });
+
+            countElement.textContent = jumlah;
+            totalElement.textContent = formatRupiah(total);
+
+            const databaseTotal = Number(summary.dataset.databaseTotal || 0);
+            const sesuai = total === databaseTotal;
+
+            totalElement.classList.toggle('text-success', sesuai);
+            totalElement.classList.toggle('text-danger', !sesuai);
+
+            const warning = summary.querySelector('.comparison-warning');
+            const comparisonStatus = summary.querySelector('.comparison-status');
+
+            if (warning) {
+                warning.style.display = total > databaseTotal ? 'block' : 'none';
+            }
+
+            if (comparisonStatus) {
+                comparisonStatus.textContent = sesuai ?
+                    'Nominal sudah sesuai.' :
+                    'Nominal belum sesuai.';
+
+                comparisonStatus.className = sesuai ?
+                    'small comparison-status text-success' :
+                    'small comparison-status text-danger';
+            }
+
+            const dateCard = form.closest('.reconciliation-date-card');
+            const badge = dateCard?.querySelector('.reconciliation-date-status');
+
+            if (badge) {
+                badge.classList.toggle('text-bg-success', sesuai);
+                badge.classList.toggle('text-bg-danger', !sesuai);
+                badge.textContent = sesuai ? 'Nominal Sesuai' : 'Belum Sesuai';
+            }
+            cekKesiapanLanjutkan();
+        }
+
+        function updateAllSummaries() {
+            forms.forEach(form => updateSummary(form));
+        }
+
+        // HIGHLIGHT NOMINAL PER TANGGAL
+        function highlightNominalMatches() {
+            document.querySelectorAll('.reconciliation-date-card').forEach(dateCard => {
+                const excelCards = [
+                    ...dateCard.querySelectorAll('.reconciliation-excel-row')
+                ];
+
+                const databaseCards = [
+                    ...dateCard.querySelectorAll('.reconciliation-database-row')
+                ];
+
+                const databaseCounts = new Map();
+                const checkedCounts = new Map();
+
+                databaseCards.forEach(card => {
+                    const nominal = String(getNominal(card));
+
+                    databaseCounts.set(
+                        nominal,
+                        (databaseCounts.get(nominal) || 0) + 1
+                    );
+                });
+
+                excelCards.forEach(card => {
+                    const checkbox = card.querySelector('.reconciliation-checkbox');
+
+                    if (checkbox?.checked) {
+                        const nominal = String(getNominal(card));
+
+                        checkedCounts.set(
+                            nominal,
+                            (checkedCounts.get(nominal) || 0) + 1
+                        );
+                    }
+                });
+
+                excelCards.forEach(card => {
+                    const nominal = String(getNominal(card));
+                    const jumlahDatabase = databaseCounts.get(nominal) || 0;
+                    const jumlahChecked = checkedCounts.get(nominal) || 0;
+
+                    card.classList.toggle(
+                        'nominal-match',
+                        jumlahDatabase > jumlahChecked
+                    );
+                });
+            });
+        }
+
+        // EVENT CHECKBOX
+        document.querySelectorAll('.reconciliation-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateAllSummaries();
+                highlightNominalMatches();
+            });
+        });
+
+        // SIMPAN DRAFT VIA AJAX
+        forms.forEach(form => {
+            const statusElement = form.querySelector('.save-status');
+            const button = form.querySelector('button[type="submit"]');
+
+            updateSummary(form);
+
+            form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+
+                if (button) button.disabled = true;
+
+                if (statusElement) {
+                    statusElement.textContent = 'Menyimpan...';
+                    statusElement.className = 'save-status small mt-2 text-muted';
+                }
+
+                const formData = new FormData(form);
+
+                // Checkbox yang dilepas harus tidak masuk checked_ids[],
+                // tetapi item_ids[] tetap dikirim untuk menyimpan status false.
+                formData.delete('checked_ids[]');
+
+                form.querySelectorAll('.reconciliation-checkbox').forEach(checkbox => {
+                    if (checkbox.checked) {
+                        formData.append('checked_ids[]', checkbox.value);
+                    }
+                });
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(
+                            result.message || 'Gagal menyimpan perubahan.'
+                        );
+                    }
+
+                    sessionStorage.setItem(
+                        'reconciliation-scroll',
+                        window.scrollY
+                    );
+
+                    sessionStorage.setItem(
+                        'reconciliation-saved',
+                        result.message || 'Draft berhasil disimpan.'
+                    );
+
+                    if (result.redirect_url) {
+                        window.location.href = result.redirect_url;
+                    } else {
+                        window.location.reload();
+                    }
+                } catch (error) {
+                    if (statusElement) {
+                        statusElement.textContent =
+                            error.message || 'Gagal menyimpan. Silakan coba kembali.';
+                        statusElement.className = 'save-status small mt-2 text-danger';
+                    }
+                } finally {
+                    if (button) button.disabled = false;
+                }
+            });
+        });
+
+        // PULIHKAN PESAN DAN SCROLL
+        const savedScroll = sessionStorage.getItem('reconciliation-scroll');
+        const savedMessage = sessionStorage.getItem('reconciliation-saved');
+
+        if (savedMessage !== null) {
+            sessionStorage.removeItem('reconciliation-saved');
+
+            const status = document.querySelector('.save-status');
+
+            if (status) {
+                status.textContent = savedMessage;
+                status.className = 'save-status small mt-2 text-success';
+            }
+        }
+
+        if (savedScroll !== null) {
+            sessionStorage.removeItem('reconciliation-scroll');
+
+            window.addEventListener('load', function() {
+                window.scrollTo(0, Number(savedScroll));
+            });
+        }
+
+        // HITUNG SEMUA SAAT HALAMAN PERTAMA KALI DIBUKA
+        updateAllSummaries();
+        highlightNominalMatches();
+
+
+        // BUKA FORM EDIT TUJUAN
+        document.querySelectorAll('.edit-database-tujuan-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const card = this.closest('.reconciliation-database-row');
+                if (!card) return;
+
+                card.querySelector('.database-tujuan-text')?.classList.add('d-none');
+                card.querySelector('.database-edit-field')?.classList.remove('d-none');
+
+                this.classList.add('d-none');
+            });
+        });
+
+        // BATAL EDIT TUJUAN
+        document.querySelectorAll('.cancel-database-tujuan-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const card = this.closest('.reconciliation-database-row');
+                if (!card) return;
+
+                const editField = card.querySelector('.database-edit-field');
+                const select = card.querySelector('.database-tujuan-input');
+                const status = card.querySelector('.database-tujuan-status');
+
+                // Kembalikan pilihan ke tujuan yang terakhir tersimpan
+                if (select) {
+                    select.value = select.dataset.savedValue || '';
+                }
+
+                editField?.classList.add('d-none');
+                card.querySelector('.database-tujuan-text')?.classList.remove('d-none');
+                card.querySelector('.edit-database-tujuan-btn')?.classList.remove('d-none');
+
+                if (status) status.textContent = '';
+            });
+        });
+
+        // SIMPAN TUJUAN KE DATABASE
+        document.querySelectorAll('.save-database-tujuan-btn').forEach(button => {
+            button.addEventListener('click', async function() {
+                const card = this.closest('.reconciliation-database-row');
+                const select = card?.querySelector('.database-tujuan-input');
+                const status = card?.querySelector('.database-tujuan-status');
+
+                if (!card || !select || !status) return;
+
+                if (!select.value) {
+                    status.textContent = 'Pilih tujuan transaksi terlebih dahulu.';
+                    status.className = 'database-tujuan-status small mt-2 text-danger';
+                    return;
+                }
+
+                button.disabled = true;
+                status.textContent = 'Menyimpan...';
+                status.className = 'database-tujuan-status small mt-2 text-muted';
+
+                try {
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')
+                        ?.content;
+
+                    if (!csrfToken) {
+                        throw new Error(
+                            'CSRF token tidak ditemukan. Periksa header.blade.php.');
+                    }
+
+                    const response = await fetch(button.dataset.url, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            id_tujuan_transaksi: select.value
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok || !result.success) {
+                        throw new Error(result.message || 'Gagal menyimpan tujuan.');
+                    }
+
+                    const namaTujuan = select.options[select.selectedIndex].text;
+
+                    card.querySelector('.database-tujuan-text').textContent = namaTujuan;
+                    card.querySelector('.database-tujuan-text').classList.remove('d-none');
+                    card.querySelector('.database-edit-field').classList.add('d-none');
+                    card.querySelector('.edit-database-tujuan-btn')?.classList.remove(
+                        'd-none');
+
+                    select.dataset.savedValue = select.value;
+
+                    status.textContent = result.message || 'Tujuan berhasil diperbarui.';
+                    status.className = 'database-tujuan-status small mt-2 text-success';
+
+                } catch (error) {
+                    status.textContent = error.message || 'Gagal menyimpan tujuan.';
+                    status.className = 'database-tujuan-status small mt-2 text-danger';
+                } finally {
+                    button.disabled = false;
+                }
+            });
+        });
+
+        // Simpan pilihan awal untuk fungsi Batal
+        document.querySelectorAll('.database-tujuan-input').forEach(select => {
+            select.dataset.savedValue = select.value;
+        });
+
+
+        function cekKesiapanLanjutkan() {
+            const btn = document.getElementById('btnLanjutkan');
+
+            if (!btn) return;
+
+            const dateCards = Array.from(
+                document.querySelectorAll('.reconciliation-date-card')
+            );
+
+            const semuaSesuai = dateCards.length > 0 &&
+                dateCards.every(dateCard => {
+                    const badge = dateCard.querySelector(
+                        '.reconciliation-date-status'
+                    );
+
+                    return badge &&
+                        badge.textContent.trim() === 'Nominal Sesuai';
+                });
+
+            btn.disabled = !semuaSesuai;
+        }
+        updateAllSummaries();
+        highlightNominalMatches();
+        cekKesiapanLanjutkan();
+
+    });
+</script>
+
+
+
+
+
+<script>
+    document.querySelectorAll('.akun-search').forEach(function(input) {
+        input.addEventListener('input', function() {
+            const select = this.nextElementSibling;
+            const keyword = this.value.toLowerCase().trim();
+
+            Array.from(select.options).forEach(function(option, index) {
+                if (index === 0) {
+                    option.hidden = false;
+                    return;
+                }
+
+                option.hidden = !option.text.toLowerCase().includes(keyword);
+            });
+
+            if (
+                select.selectedOptions.length &&
+                select.selectedOptions[0].hidden
+            ) {
+                select.value = '';
+            }
+        });
+    });
+</script>
+<script>
+    document.querySelectorAll('.akun-select, .sumber-dana-select').forEach(function(select) {
+        select.addEventListener('change', async function() {
+            const card = this.closest('.alert');
+            const form = document.getElementById('formTujuan');
+            const isSumberDana = this.classList.contains('sumber-dana-select');
+
+            const status = card.querySelector(
+                isSumberDana ? '.sumber-dana-status' : '.autosave-status'
+            );
+
+            if (!this.value) {
+                status.textContent = isSumberDana ?
+                    'Pilih sumber dana terlebih dahulu.' :
+                    'Pilih tujuan terlebih dahulu.';
+                return;
+            }
+
+            const itemIds = Array.from(
+                card.querySelectorAll('input[name^="item_ids["]')
+            ).map(input => input.value);
+
+            status.textContent = 'Menyimpan...';
+            this.disabled = true;
+
+            const formData = new FormData();
+
+            formData.append('jenis', isSumberDana ? 'sumber_dana' : 'tujuan');
+            formData.append('nilai', this.value);
+
+            itemIds.forEach(id => {
+                formData.append('item_ids[]', id);
+            });
+
+            try {
+                const response = await fetch(form.dataset.autosaveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': form.querySelector(
+                            'input[name="_token"]'
+                        ).value,
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        result.message || 'Gagal menyimpan pilihan.'
+                    );
+                }
+
+                status.textContent = 'Tersimpan: ' + result.nama;
+
+                if (!isSumberDana) {
+                    card.classList.remove('alert-outline-danger');
+                    card.classList.add('alert-outline-success');
+                }
+            } catch (error) {
+                status.textContent = error.message;
+            } finally {
+                this.disabled = false;
+            }
+        });
+    });
+</script>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('formSimpanTransaksi');
+        const tombol = document.getElementById('btnImport');
+
+        if (!form || !tombol) return;
+
+        form.addEventListener('submit', function(e) {
+            if (!confirm('Yakin ingin menyimpan data draft ke transaksi?')) {
+                e.preventDefault();
+                return;
+            }
+
+            tombol.disabled = true;
+            tombol.innerHTML = 'Memproses...';
+        });
+    });
+</script>
+
+
+
+
+
+
 
 
 </body>
