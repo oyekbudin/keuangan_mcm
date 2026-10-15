@@ -52,3 +52,9 @@ pnpm-debug.log*
 
 # Laravel Pint
 .php-cs-fixer.cache
+
+# File upload pengguna, jangan masuk GitHub
+/storage/app/public/bukti-transaksi/
+
+# Link storage Laravel
+/public/storage
