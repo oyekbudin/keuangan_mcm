@@ -476,34 +476,23 @@ class ImportDraftController extends Controller
 
         $kelompok = $items
             ->groupBy('keterangan')
-            ->map(function ($items, $uraian) use ($riwayatTujuan) {
-                $riwayat = $riwayatTujuan->get($uraian, collect());
-
-                // Pilih tujuan yang paling sering digunakan untuk uraian tersebut.
-                $rekomendasi = $riwayat
-                    ->countBy('id_tujuan_transaksi')
-                    ->sortDesc()
-                    ->keys()
-                    ->first();
-
+            ->map(function ($items, $uraian) {
                 $pertama = $items->first();
 
-                // Pertahankan tujuan draft yang sudah ada.
-                $idTujuan = $pertama->id_tujuan_transaksi ?: $rekomendasi;
-                $id_sumber_dana = $pertama->id_sumber_dana ?: "";
+                $idTujuan = $pertama->id_tujuan_transaksi;
+                $idSumberDana = $pertama->id_sumber_dana;
 
                 return [
                     'uraian' => $uraian,
-                    'id_sumber_dana' => $id_sumber_dana,
+                    'id_sumber_dana' => $idSumberDana,
                     'jumlah' => $items->count(),
                     'total_nominal' => $items->sum('nominal'),
                     'item_ids' => $items->pluck('id')->all(),
                     'id_tujuan_transaksi' => $idTujuan,
-                    'sudah_ada_tujuan' => $idTujuan !== null,
+                    'sudah_ada_tujuan' => !empty($idTujuan),
                 ];
             })
             ->sort(function ($a, $b) {
-                // Yang belum punya tujuan ditampilkan lebih dahulu.
                 $status = (int) $a['sudah_ada_tujuan']
                     <=> (int) $b['sudah_ada_tujuan'];
 
@@ -511,7 +500,6 @@ class ImportDraftController extends Controller
                     return $status;
                 }
 
-                // Urutkan uraian berdasarkan abjad A-Z.
                 return strcasecmp($a['uraian'] ?? '', $b['uraian'] ?? '');
             })
             ->values();
