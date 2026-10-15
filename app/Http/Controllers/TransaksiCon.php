@@ -144,9 +144,14 @@ class TransaksiCon extends Controller
             ->setTimeFromTimeString(now()->format('H:i:s'));
 
         // Generate kode bukti per bulan
-        $nomor = Transaksi::whereYear('date', $date->year)
+        $nomorTerakhir = Transaksi::whereYear('date', $date->year)
             ->whereMonth('date', $date->month)
-            ->count() + 1;
+            ->orderByRaw("CAST(SUBSTRING(kode_bukti, 4) AS UNSIGNED) DESC")
+            ->value('kode_bukti');
+
+        $nomor = $nomorTerakhir
+            ? ((int) substr($nomorTerakhir, 3)) + 1
+            : 1;
 
         $kodeBukti = 'BPU' . str_pad($nomor, 3, '0', STR_PAD_LEFT);
 
