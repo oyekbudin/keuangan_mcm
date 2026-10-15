@@ -574,7 +574,7 @@ class ImportDraftController extends Controller
             ->with('success', 'Pemetaan tujuan berhasil disimpan.');
     }
 
-    public function autosaveTujuan(Request $request, ImportDraft $draft)
+    /*public function autosaveTujuan(Request $request, ImportDraft $draft)
     {
         $validated = $request->validate([
             'jenis' => ['required', 'in:tujuan,sumber_dana'],
@@ -619,6 +619,57 @@ class ImportDraftController extends Controller
                 ]);
             }
         }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pilihan berhasil disimpan.',
+            'jenis' => $validated['jenis'],
+            'nama' => $akun->name,
+        ]);
+    }*/
+    public function autosaveTujuan(Request $request, ImportDraft $draft)
+    {
+        $validated = $request->validate([
+            'jenis' => ['required', 'in:tujuan,sumber_dana'],
+            'nilai' => ['required', 'integer', 'exists:akun,id'],
+            'item_ids' => ['required', 'array', 'min:1'],
+            'item_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $akun = Akun::findOrFail($validated['nilai']);
+
+        if (
+            $validated['jenis'] === 'sumber_dana'
+            && !in_array($akun->jenis_akun, ['Owner', 'Kas'])
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun tersebut bukan sumber dana yang valid.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($draft, $validated, $akun) {
+            $items = $draft->items()
+                ->whereIn('id', $validated['item_ids'])
+                ->where('is_checked', false)
+                ->get();
+
+            if ($items->count() !== count($validated['item_ids'])) {
+                abort(422, 'Data transaksi tidak valid atau sudah dicentang.');
+            }
+
+            foreach ($items as $item) {
+                if ($validated['jenis'] === 'tujuan') {
+                    $item->id_tujuan_transaksi = $akun->id;
+                    $item->tujuan = $akun->name;
+                } else {
+                    $item->id_sumber_dana = $akun->id;
+                    $item->sumber_dana = $akun->name;
+                }
+
+                $item->save();
+            }
+        });
 
         return response()->json([
             'success' => true,

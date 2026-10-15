@@ -80,24 +80,24 @@
 <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
 @if (session('success'))
-<script>
-    Toastify({
-        text: @json(session('success')),
-        duration: 3500,
-        close: true,
-        gravity: "top",
-        position: "right",
-        stopOnFocus: true,
-        className: "toast-animasi",
-        style: {
-            background: "linear-gradient(to right, #00b09b, #96c93d)",
-            borderRadius: "8px"
-        },
-        callback: function () {
-            // Toast sudah selesai ditampilkan.
-        }
-    }).showToast();
-</script>
+    <script>
+        Toastify({
+            text: @json(session('success')),
+            duration: 3500,
+            close: true,
+            gravity: "top",
+            position: "right",
+            stopOnFocus: true,
+            className: "toast-animasi",
+            style: {
+                background: "linear-gradient(to right, #00b09b, #96c93d)",
+                borderRadius: "8px"
+            },
+            callback: function() {
+                // Toast sudah selesai ditampilkan.
+            }
+        }).showToast();
+    </script>
 @endif
 
 
@@ -1417,6 +1417,10 @@
                 isSumberDana ? '.sumber-dana-status' : '.autosave-status'
             );
 
+            const itemIds = Array.from(
+                card.querySelectorAll('input[name^="item_ids["]')
+            ).map(input => input.value);
+
             if (!this.value) {
                 status.textContent = isSumberDana ?
                     'Pilih sumber dana terlebih dahulu.' :
@@ -1424,19 +1428,19 @@
                 return;
             }
 
-            const itemIds = Array.from(
-                card.querySelectorAll('input[name^="item_ids["]')
-            ).map(input => input.value);
+            if (itemIds.length === 0) {
+                status.textContent = 'Gagal: ID baris draft tidak ditemukan.';
+                return;
+            }
 
             status.textContent = 'Menyimpan...';
             this.disabled = true;
 
             const formData = new FormData();
-
             formData.append('jenis', isSumberDana ? 'sumber_dana' : 'tujuan');
             formData.append('nilai', this.value);
 
-            itemIds.forEach(id => {
+            itemIds.forEach(function(id) {
                 formData.append('item_ids[]', id);
             });
 
@@ -1444,9 +1448,7 @@
                 const response = await fetch(form.dataset.autosaveUrl, {
                     method: 'POST',
                     headers: {
-                        'X-CSRF-TOKEN': form.querySelector(
-                            'input[name="_token"]'
-                        ).value,
+                        'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value,
                         'Accept': 'application/json'
                     },
                     body: formData
@@ -1455,9 +1457,7 @@
                 const result = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(
-                        result.message || 'Gagal menyimpan pilihan.'
-                    );
+                    throw new Error(result.message || 'Gagal menyimpan pilihan.');
                 }
 
                 status.textContent = 'Tersimpan: ' + result.nama;

@@ -51,6 +51,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/laporan/bos/{tahun}/{bulan}', [LaporanCon::class, 'bos'])
         ->name('laporan.bos.pdf');
 
+    Route::get('/laporan/bos/{tahun}/{bulan}/excel', [
+        LaporanCon::class,
+        'exportExcel',
+    ])->name('laporan.bos.excel');
+
+    Route::get('/laporan/bos/{tahun}/{bulan}/zip', [
+        LaporanCon::class,
+        'exportZip',
+    ])->name('laporan.bos.zip');
+
     //ImportTransaksiController
     Route::get('/import-transaksi', [
         ImportTransaksiController::class,

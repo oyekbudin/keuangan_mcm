@@ -34,7 +34,7 @@
                                     ];
                                 @endphp
 
-                                
+
                                 <ul class="nav nav-pills mb-3" id="pillTabs" role="tablist">
                                     @foreach ($data['sumberDanaLaporan'] as $akun)
                                         <li class="nav-item" role="presentation">
@@ -77,9 +77,9 @@
                                                             <div class="accordion-body">
                                                                 <div class="row g-2">
                                                                     @foreach ($namaBulan as $nomor => $nama)
-                                                                        <div class="col-6 col-md-2">
+                                                                        <div class="col-6 col-md-3">
                                                                             @if (in_array($nomor, $bulanTersedia))
-                                                                                <a href="{{ route('laporan.bos.pdf', [
+                                                                                <!--a href="{{ route('laporan.bos.pdf', [
                                                                                     'tahun' => $tahun,
                                                                                     'bulan' => $nomor,
                                                                                     'akun' => $akun->id,
@@ -87,7 +87,52 @@
                                                                                     target="_blank"
                                                                                     class="btn btn-outline-primary w-100">
                                                                                     {{ $nama }}
-                                                                                </a>
+                                                                                </a-->
+
+                                                                                <div class="card h-100">
+                                                                                    <div class="card-body p-3">
+                                                                                        <h6 class="mb-3">
+                                                                                            {{ $nama }}
+                                                                                        </h6>
+
+                                                                                        <div class="btn-group"
+                                                                                            role="group">
+                                                                                            <a href="{{ route('laporan.bos.pdf', [
+                                                                                                'tahun' => $tahun,
+                                                                                                'bulan' => $nomor,
+                                                                                                'akun' => $akun->id,
+                                                                                            ]) }}"
+                                                                                                target="_blank"
+                                                                                                class="btn btn-outline-danger btn-sm">
+                                                                                                <i
+                                                                                                    class="bi bi-file-pdf"></i>
+                                                                                                PDF
+                                                                                            </a>
+
+                                                                                            <a href="{{ route('laporan.bos.excel', [
+                                                                                                'tahun' => $tahun,
+                                                                                                'bulan' => $nomor,
+                                                                                                'akun' => $akun->id,
+                                                                                            ]) }}"
+                                                                                                class="btn btn-outline-success btn-sm">
+                                                                                                <i
+                                                                                                    class="bi bi-file-earmark-excel"></i>
+                                                                                                Excel
+                                                                                            </a>
+
+                                                                                            <a href="{{ route('laporan.bos.zip', [
+                                                                                                'tahun' => $tahun,
+                                                                                                'bulan' => $nomor,
+                                                                                                'akun' => $akun->id,
+                                                                                            ]) }}"
+                                                                                                class="btn btn-outline-secondary btn-sm">
+                                                                                                <i
+                                                                                                    class="bi bi-file-earmark-zip"></i>
+                                                                                                ZIP
+                                                                                            </a>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                             @else
                                                                                 <button type="button"
                                                                                     class="btn btn-outline-secondary w-100"
@@ -114,7 +159,7 @@
                                         </p>
                                     @endforelse
                                 </div>
-                                
+
 
                             </div>
 
@@ -158,7 +203,7 @@
 
                                         <div class="accordion" id="accordionLaporan">
                                             @forelse ($data['bulanAdaPerTahun'] as $tahun => $bulanTersedia)
-                                                <div class="accordion-item">
+<div class="accordion-item">
                                                     <h2 class="accordion-header">
                                                         <button
                                                             class="accordion-button {{ !$loop->first ? 'collapsed' : '' }}"
@@ -199,11 +244,11 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                                        @empty
+                            @empty
                                                 <p class="text-muted">
                                                     Belum ada transaksi Pengeluaran Bos.
                                                 </p>
-                                            @endforelse
+@endforelse
                                         </div>
 
                                     </div>

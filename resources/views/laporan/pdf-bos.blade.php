@@ -180,32 +180,42 @@
 
     {{-- LAMPIRAN BUKTI --}}
     @foreach ($transaksi->chunk(2) as $kelompok)
-        <div class="lampiran-page">
-            @foreach ($kelompok as $item)
-                <div class="lampiran-item">
-                    <div class="kode-bukti">
-                        {{ $item->kode_bukti ?? '-' }}
-                    </div>
+        @php
+            $adaGambar = $kelompok->contains(function ($item) {
+                return ($item->bukti && file_exists(storage_path('app/public/' . $item->bukti))) ||
+                    ($item->bukti_nota && file_exists(storage_path('app/public/' . $item->bukti_nota)));
+            });
+        @endphp
 
-                    <table class="tabel-gambar">
-                        <tbody>
-                            <tr>
-                                <td>
-                                    @if ($item->bukti && file_exists(storage_path('app/public/' . $item->bukti)))
-                                        <img src="{{ storage_path('app/public/' . $item->bukti) }}">
-                                    @endif
-                                </td>
-                                <td>
-                                    @if ($item->bukti_nota && file_exists(storage_path('app/public/' . $item->bukti_nota)))
-                                        <img src="{{ storage_path('app/public/' . $item->bukti_nota) }}">
-                                    @endif
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            @endforeach
-        </div>
+        @if ($adaGambar)
+            <div class="lampiran-page">
+                @foreach ($kelompok as $item)
+                    <div class="lampiran-item">
+                        <div class="kode-bukti">
+                            {{ $item->kode_bukti ?? '-' }}
+                        </div>
+
+                        <table class="tabel-gambar">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        @if ($item->bukti && file_exists(storage_path('app/public/' . $item->bukti)))
+                                            <img src="{{ storage_path('app/public/' . $item->bukti) }}">
+                                        @endif
+                                    </td>
+
+                                    <td>
+                                        @if ($item->bukti_nota && file_exists(storage_path('app/public/' . $item->bukti_nota)))
+                                            <img src="{{ storage_path('app/public/' . $item->bukti_nota) }}">
+                                        @endif
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     @endforeach
 
 
