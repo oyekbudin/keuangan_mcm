@@ -19,6 +19,10 @@
 
                             <div class="card-header">
                                 <h5 class="card-title">Tambah Transaksi</h5>
+                                <a class="card-subtitle" href="https://imageonline.io/perspective-crop/" target="_blank"
+                                    rel="noopener noreferrer" class="btn btn-primary" title="Perspective Crop">
+                                    <i class="bi bi-crop"></i> Crop Nota
+                                </a>
                             </div>
 
                             <div class="card-body">
