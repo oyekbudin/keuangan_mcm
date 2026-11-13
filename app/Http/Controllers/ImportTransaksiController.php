@@ -14,6 +14,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use ZipArchive;
+use App\Services\SaldoBulananService;
 
 class ImportTransaksiController extends Controller
 {
@@ -291,8 +292,10 @@ class ImportTransaksiController extends Controller
         return $hasil;
     }
 
-    public function simpan(Request $request)
-    {
+    public function simpan(
+        Request $request,
+        SaldoBulananService $saldoService
+    ) {
         $request->validate([
             'token' => 'required|string|size:40|regex:/^[A-Za-z0-9]+$/',
         ]);
@@ -365,54 +368,85 @@ class ImportTransaksiController extends Controller
                 }
             }
 
-            DB::transaction(function () use ($hasil, $zip, &$fileTersimpan) {
-                foreach ($hasil as $item) {
-                    $tanggal = Carbon::createFromFormat(
-                        'Y-m-d',
-                        $item['tanggal']
-                    )->setTimeFromTimeString(now()->format('H:i:s'));
 
-                    $folder = 'bukti-transaksi/' . $tanggal->format('Y/m');
+            DB::transaction(function () use ($hasil, $zip, &$fileTersimpan, $saldoService) {
+                $akunTerdampak = [];
 
-                    $pathTransfer = null;
-                    $pathNota = null;
+                // Observer dinonaktifkan sementara agar tidak menghitung
+                // ulang saldo untuk setiap baris import.
+                Transaksi::withoutEvents(function () use ($hasil, $zip, &$fileTersimpan, &$akunTerdampak) {
+                    foreach ($hasil as $item) {
+                        $tanggal = Carbon::createFromFormat(
+                            'Y-m-d',
+                            $item['tanggal']
+                        )->setTimeFromTimeString(now()->format('H:i:s'));
 
-                    if ($item['file_transfer'] !== '' && $zip instanceof ZipArchive) {
-                        $pathTransfer = $this->simpanBuktiZip(
-                            $zip,
-                            $item['file_transfer'],
-                            $folder,
-                            $item['kode_bukti'],
-                            false
-                        );
+                        $folder = 'bukti-transaksi/' . $tanggal->format('Y/m');
 
-                        $fileTersimpan[] = $pathTransfer;
+                        $pathTransfer = null;
+                        $pathNota = null;
+
+                        if ($item['file_transfer'] !== '' && $zip instanceof ZipArchive) {
+                            $pathTransfer = $this->simpanBuktiZip(
+                                $zip,
+                                $item['file_transfer'],
+                                $folder,
+                                $item['kode_bukti'],
+                                false
+                            );
+
+                            $fileTersimpan[] = $pathTransfer;
+                        }
+
+                        if ($item['file_nota'] !== '' && $zip instanceof ZipArchive) {
+                            $pathNota = $this->simpanBuktiZip(
+                                $zip,
+                                $item['file_nota'],
+                                $folder,
+                                $item['kode_bukti'],
+                                true
+                            );
+
+                            $fileTersimpan[] = $pathNota;
+                        }
+
+                        Transaksi::create([
+                            'kode_bukti' => $item['kode_bukti'],
+                            'date' => $tanggal,
+                            'id_sumber_dana' => $item['id_sumber_dana'],
+                            'id_tujuan_transaksi' => $item['id_tujuan_transaksi'],
+                            'nominal' => (int) $item['nominal'],
+                            'keterangan' => $item['keterangan'],
+                            'bukti' => $pathTransfer,
+                            'bukti_nota' => $pathNota,
+                        ]);
+
+                        // Catat akun dan bulan paling awal yang terdampak.
+                        foreach ([
+                            $item['id_sumber_dana'],
+                            $item['id_tujuan_transaksi'],
+                        ] as $akunId) {
+                            $bulan = $tanggal->copy()->startOfMonth();
+
+                            if (
+                                !isset($akunTerdampak[$akunId]) ||
+                                $bulan->lt($akunTerdampak[$akunId])
+                            ) {
+                                $akunTerdampak[$akunId] = $bulan;
+                            }
+                        }
                     }
+                });
 
-                    if ($item['file_nota'] !== '' && $zip instanceof ZipArchive) {
-                        $pathNota = $this->simpanBuktiZip(
-                            $zip,
-                            $item['file_nota'],
-                            $folder,
-                            $item['kode_bukti'],
-                            true
-                        );
-
-                        $fileTersimpan[] = $pathNota;
-                    }
-
-                    Transaksi::create([
-                        'kode_bukti' => $item['kode_bukti'],
-                        'date' => $tanggal,
-                        'id_sumber_dana' => $item['id_sumber_dana'],
-                        'id_tujuan_transaksi' => $item['id_tujuan_transaksi'],
-                        'nominal' => (int) $item['nominal'],
-                        'keterangan' => $item['keterangan'],
-                        'bukti' => $pathTransfer,
-                        'bukti_nota' => $pathNota,
-                    ]);
+                // Hitung ulang saldo setiap akun hanya satu kali.
+                foreach ($akunTerdampak as $akunId => $bulan) {
+                    $saldoService->hitungUlang(
+                        (int) $akunId,
+                        $bulan
+                    );
                 }
             });
+
 
             if ($zip instanceof ZipArchive) {
                 $zip->close();

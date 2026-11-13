@@ -120,6 +120,17 @@
         </thead>
 
         <tbody>
+            @if ($akun->jenis_akun === 'Kas')
+                <tr>
+                    <td colspan="6" style="text-align: right; font-weight: bold;">
+                        Saldo Awal
+                    </td>
+                    <td class="nominal" style="font-weight: bold;">
+                        {{ number_format($saldoAwal, 0, ',', '.') }}
+                    </td>
+                </tr>
+            @endif
+
             @forelse ($transaksi as $item)
                 <tr>
                     <td>{{ $loop->iteration }}</td>

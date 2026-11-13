@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 use App\Models\TujuanTransaksi;
 use App\Models\Transaksi;
 use App\Models\Akun;
-
+use App\Models\SaldoBulanan;
 
 
 class TransaksiCon extends Controller
@@ -23,24 +23,32 @@ class TransaksiCon extends Controller
             ->where('sumber.jenis_akun', 'Owner')
             ->sum('transaksi.nominal');
 
-        // Saldo setiap akun Kas
+
+        // Ambil saldo terakhir setiap akun Kas
+
+        $saldoTerakhir = SaldoBulanan::whereIn(
+            'akun_id',
+            Akun::where('jenis_akun', 'Kas')->select('id')
+        )
+            ->orderByDesc('tahun')
+            ->orderByDesc('bulan')
+            ->get()
+            ->unique('akun_id')
+            ->keyBy('akun_id');
 
         $saldoKas = Akun::where('jenis_akun', 'Kas')
             ->orderBy('name')
             ->get()
-            ->map(function ($akun) {
-                // Semua uang masuk ke kas ini
-                $masuk = Transaksi::where('id_tujuan_transaksi', $akun->id)
-                    ->sum('nominal');
+            ->map(function ($akun) use ($saldoTerakhir) {
+                $saldo = $saldoTerakhir->get($akun->id);
 
-                // Semua uang keluar dari kas ini
-                $keluar = Transaksi::where('id_sumber_dana', $akun->id)
-                    ->sum('nominal');
-
-                $akun->saldo = $masuk - $keluar;
+                $akun->saldo = $saldo
+                    ? $saldo->saldo_akhir
+                    : 0;
 
                 return $akun;
             });
+
 
 
 

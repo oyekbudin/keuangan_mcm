@@ -17,6 +17,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
 use Illuminate\Support\Collection;
+use App\Models\SaldoBulanan;
 
 class LaporanCon extends Controller
 {
@@ -159,7 +160,21 @@ class LaporanCon extends Controller
             ->orderBy('id')
             ->get();
 
-        $saldoBerjalan = 0;
+        // Ambil saldo bulanan khusus akun Kas
+        $saldoBulanan = null;
+        $saldoAwal = 0;
+
+        if ($akun->jenis_akun === 'Kas') {
+            $saldoBulanan = SaldoBulanan::where('akun_id', $akun->id)
+                ->where('tahun', $tahun)
+                ->where('bulan', $bulan)
+                ->first();
+
+            $saldoAwal = $saldoBulanan?->saldo_awal ?? 0;
+        }
+
+        // Saldo berjalan dimulai dari saldo awal bulan
+        $saldoBerjalan = $saldoAwal;
 
         $transaksi->each(function ($item) use ($akun, &$saldoBerjalan) {
             if ($item->id_tujuan_transaksi == $akun->id) {
@@ -173,14 +188,16 @@ class LaporanCon extends Controller
             $item->saldo_berjalan = $saldoBerjalan;
         });
 
-        return [$akun, $transaksi];
+        return [$akun, $transaksi, $saldoBulanan, $saldoAwal];
     }
 
     private function dataPdfTransaksi(
         $akun,
         $transaksi,
         $tahun,
-        $bulan
+        $bulan,
+        $saldoBulanan,
+        $saldoAwal
     ) {
         return [
             'title' => $akun->jenis_akun === 'Owner'
@@ -207,15 +224,19 @@ class LaporanCon extends Controller
                 ->where('id_sumber_dana', $akun->id)
                 ->sum('nominal'),
 
-            'saldoAkhir' => $transaksi->isNotEmpty()
-                ? $transaksi->last()->saldo_berjalan
-                : 0,
+            'saldoAwal' => $saldoAwal,
+
+            'saldoAkhir' => $akun->jenis_akun === 'Kas' && $saldoBulanan
+                ? $saldoBulanan->saldo_akhir
+                : ($transaksi->isNotEmpty()
+                    ? $transaksi->last()->saldo_berjalan
+                    : 0),
         ];
     }
 
     public function exportPdfTransaksi($tahun, $bulan)
     {
-        [$akun, $transaksi] = $this->transaksiUntukPdf(
+        [$akun, $transaksi, $saldoBulanan, $saldoAwal] = $this->transaksiUntukPdf(
             $tahun,
             $bulan
         );
@@ -230,7 +251,9 @@ class LaporanCon extends Controller
             $akun,
             $transaksi,
             $tahun,
-            $bulan
+            $bulan,
+            $saldoBulanan,
+            $saldoAwal
         );
 
         $pdf = Pdf::loadView('laporan.pdf-bos', $data)
