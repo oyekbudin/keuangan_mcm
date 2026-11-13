@@ -25,8 +25,8 @@
                                 <div class="row">
                                     <div class="col-12">
                                         <div class="alert alert-info">
-                                            Unggah file Excel transaksi dan file ZIP yang berisi
-                                            gambar bukti transfer serta nota.
+                                            Unggah file Excel transaksi. File ZIP bukti transfer dan nota bersifat
+                                            opsional.
                                         </div>
 
                                         <form action="{{ route('import-transaksi.preview') }}" method="POST"
@@ -50,7 +50,7 @@
                                                 </label>
 
                                                 <input type="file" class="form-control" id="fileBukti"
-                                                    name="file_bukti" accept=".zip" required>
+                                                    name="file_bukti" accept=".zip">
 
                                                 @error('file_bukti')
                                                     <div class="text-danger mt-1">{{ $message }}</div>

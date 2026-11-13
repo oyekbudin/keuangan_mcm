@@ -36,7 +36,7 @@ class ImportTransaksiController extends Controller
     {
         $request->validate([
             'file_excel' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-            'file_bukti' => 'required|file|mimes:zip|max:51200',
+            'file_bukti' => 'nullable|file|mimes:zip|max:51200',
         ]);
 
         $token = Str::random(40);
@@ -47,21 +47,26 @@ class ImportTransaksiController extends Controller
             $token . '.xlsx'
         );
 
-        Storage::disk('local')->putFileAs(
-            'import-transaksi-temp',
-            $request->file('file_bukti'),
-            $token . '.zip'
-        );
+        if ($request->hasFile('file_bukti')) {
+            Storage::disk('local')->putFileAs(
+                'import-transaksi-temp',
+                $request->file('file_bukti'),
+                $token . '.zip'
+            );
+        }
 
         try {
-            $hasil = $this->bacaDanValidasi(
-                Storage::disk('local')->path(
-                    'import-transaksi-temp/' . $token . '.xlsx'
-                ),
-                Storage::disk('local')->path(
-                    'import-transaksi-temp/' . $token . '.zip'
-                )
+            $pathExcel = Storage::disk('local')->path(
+                'import-transaksi-temp/' . $token . '.xlsx'
             );
+
+            $pathZipSementara = 'import-transaksi-temp/' . $token . '.zip';
+
+            $pathZip = Storage::disk('local')->exists($pathZipSementara)
+                ? Storage::disk('local')->path($pathZipSementara)
+                : null;
+
+            $hasil = $this->bacaDanValidasi($pathExcel, $pathZip);
         } catch (\Throwable $e) {
             $this->hapusFileSementara($token);
 
@@ -112,7 +117,8 @@ class ImportTransaksiController extends Controller
         ]);
     }
 
-    private function bacaDanValidasi(string $pathExcel, string $pathZip): array
+    //private function bacaDanValidasi(string $pathExcel, string $pathZip): array
+    private function bacaDanValidasi(string $pathExcel, ?string $pathZip): array
     {
         $spreadsheet = IOFactory::load($pathExcel);
 
@@ -128,26 +134,27 @@ class ImportTransaksiController extends Controller
             fn($akun) => mb_strtolower(trim($akun->name))
         );
 
-        $zip = new ZipArchive();
-
-        if ($zip->open($pathZip) !== true) {
-            throw new \RuntimeException('ZIP tidak dapat dibuka.');
-        }
-
         $fileZip = [];
 
-        for ($i = 0; $i < $zip->numFiles; $i++) {
-            $nama = $zip->getNameIndex($i);
+        if ($pathZip !== null) {
+            $zip = new ZipArchive();
 
-            if (!$nama || str_ends_with($nama, '/')) {
-                continue;
+            if ($zip->open($pathZip) !== true) {
+                throw new \RuntimeException('ZIP tidak dapat dibuka.');
             }
 
-            // Simpan nama lengkap entry agar isi file dapat diambil kembali.
-            $fileZip[mb_strtolower(basename($nama))] = $nama;
-        }
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $nama = $zip->getNameIndex($i);
 
-        $zip->close();
+                if (!$nama || str_ends_with($nama, '/')) {
+                    continue;
+                }
+
+                $fileZip[mb_strtolower(basename($nama))] = $nama;
+            }
+
+            $zip->close();
+        }
 
         $hasil = [];
 
@@ -295,23 +302,25 @@ class ImportTransaksiController extends Controller
         $pathExcel = 'import-transaksi-temp/' . $token . '.xlsx';
         $pathZip = 'import-transaksi-temp/' . $token . '.zip';
 
-        if (
-            !Storage::disk('local')->exists($pathExcel) ||
-            !Storage::disk('local')->exists($pathZip)
-        ) {
+        if (!Storage::disk('local')->exists($pathExcel)) {
             return redirect()
                 ->route('import-transaksi.index')
                 ->withErrors([
-                    'file_excel' => 'File sementara sudah tidak tersedia. Silakan upload ulang.',
+                    'file_excel' => 'File Excel sementara sudah tidak tersedia. Silakan upload ulang.',
                 ]);
         }
 
+        $pathZipFull = Storage::disk('local')->exists($pathZip)
+            ? Storage::disk('local')->path($pathZip)
+            : null;
+
         $fileTersimpan = [];
+        $zip = null;
 
         try {
             $hasil = $this->bacaDanValidasi(
                 Storage::disk('local')->path($pathExcel),
-                Storage::disk('local')->path($pathZip)
+                $pathZipFull
             );
 
             if (count($hasil) === 0) {
@@ -348,10 +357,12 @@ class ImportTransaksiController extends Controller
                 }
             }
 
-            $zip = new ZipArchive();
+            if ($pathZipFull !== null) {
+                $zip = new ZipArchive();
 
-            if ($zip->open(Storage::disk('local')->path($pathZip)) !== true) {
-                throw new \RuntimeException('ZIP tidak dapat dibuka.');
+                if ($zip->open($pathZipFull) !== true) {
+                    throw new \RuntimeException('ZIP tidak dapat dibuka.');
+                }
             }
 
             DB::transaction(function () use ($hasil, $zip, &$fileTersimpan) {
@@ -366,7 +377,7 @@ class ImportTransaksiController extends Controller
                     $pathTransfer = null;
                     $pathNota = null;
 
-                    if ($item['file_transfer'] !== '') {
+                    if ($item['file_transfer'] !== '' && $zip instanceof ZipArchive) {
                         $pathTransfer = $this->simpanBuktiZip(
                             $zip,
                             $item['file_transfer'],
@@ -378,7 +389,7 @@ class ImportTransaksiController extends Controller
                         $fileTersimpan[] = $pathTransfer;
                     }
 
-                    if ($item['file_nota'] !== '') {
+                    if ($item['file_nota'] !== '' && $zip instanceof ZipArchive) {
                         $pathNota = $this->simpanBuktiZip(
                             $zip,
                             $item['file_nota'],
@@ -403,7 +414,9 @@ class ImportTransaksiController extends Controller
                 }
             });
 
-            $zip->close();
+            if ($zip instanceof ZipArchive) {
+                $zip->close();
+            }
 
             $this->hapusFileSementara($token);
 
@@ -411,7 +424,7 @@ class ImportTransaksiController extends Controller
                 ->route('import-transaksi.index')
                 ->with('success', count($hasil) . ' transaksi berhasil diimport.');
         } catch (\Throwable $e) {
-            if (isset($zip) && $zip instanceof ZipArchive) {
+            if ($zip instanceof ZipArchive) {
                 $zip->close();
             }
 

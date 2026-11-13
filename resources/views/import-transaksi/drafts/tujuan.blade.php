@@ -115,21 +115,17 @@
                                     @endforelse
                                 </form>
                                 @if ($kelompok->isNotEmpty())
-                                    <div class="d-flex justify-content-end mb-4">
+                                    <div class="d-flex justify-content-end mb-4 mt-3">
+                                        <form action="{{ route('import-drafts.simpan-transaksi', $draft) }}"
+                                            method="POST" id="formExportExcel">
+                                            @csrf
 
-                                        <div class="d-flex justify-content-end mt-3">
-                                            
-                                            <form action="{{ route('import-drafts.simpan-transaksi', $draft) }}"
-                                                method="POST" id="formSimpanTransaksi">
-                                                @csrf
-
-                                                <button type="submit" id="btnImport" class="btn btn-primary">
-                                                    Simpan ke Transaksi
-                                                </button>
-                                            </form>
-                                            
-                                        </div>
-
+                                            <button type="submit" class="btn btn-success"
+                                                onclick="return confirm('Unduh Excel berisi transaksi yang belum ditemukan di database?')">
+                                                <i class="bi bi-file-earmark-excel me-1"></i>
+                                                Unduh Excel Hasil Rekonsiliasi
+                                            </button>
+                                        </form>
                                     </div>
                                 @endif
 

@@ -14,6 +14,8 @@ use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use App\Models\Transaksi;
 use App\Models\PemetaanUraianTujuan;
 use Illuminate\Validation\ValidationException;
+use App\Exports\RekonsiliasiTransaksiExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 
 
@@ -562,59 +564,7 @@ class ImportDraftController extends Controller
             ->with('success', 'Pemetaan tujuan berhasil disimpan.');
     }
 
-    /*public function autosaveTujuan(Request $request, ImportDraft $draft)
-    {
-        $validated = $request->validate([
-            'jenis' => ['required', 'in:tujuan,sumber_dana'],
-            'nilai' => ['required', 'integer', 'exists:akun,id'],
-            'item_ids' => ['required', 'array', 'min:1'],
-            'item_ids.*' => ['required', 'integer', 'distinct'],
-        ]);
 
-        $akun = Akun::findOrFail($validated['nilai']);
-
-        // Validasi jenis akun sesuai dropdown yang dipilih.
-        if (
-            $validated['jenis'] === 'sumber_dana'
-            && !in_array($akun->jenis_akun, ['Owner', 'Kas'])
-        ) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Akun tersebut bukan sumber dana yang valid.',
-            ], 422);
-        }
-
-        $items = $draft->items()
-            ->whereIn('id', $validated['item_ids'])
-            ->get();
-
-        abort_if(
-            $items->count() !== count($validated['item_ids']),
-            422,
-            'Data transaksi tidak valid.'
-        );
-
-        foreach ($items as $item) {
-            if ($validated['jenis'] === 'tujuan') {
-                $item->update([
-                    'id_tujuan_transaksi' => $akun->id,
-                    'tujuan' => $akun->name,
-                ]);
-            } else {
-                $item->update([
-                    'id_sumber_dana' => $akun->id,
-                    'sumber_dana' => $akun->name,
-                ]);
-            }
-        }
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Pilihan berhasil disimpan.',
-            'jenis' => $validated['jenis'],
-            'nama' => $akun->name,
-        ]);
-    }*/
     public function autosaveTujuan(Request $request, ImportDraft $draft)
     {
         $validated = $request->validate([
@@ -667,8 +617,127 @@ class ImportDraftController extends Controller
         ]);
     }
 
-
     public function simpanTransaksi(ImportDraft $draft)
+    {
+        // Hanya mengambil transaksi yang belum ditemukan di database.
+        $items = $draft->items()
+            ->where('is_checked', false)
+            ->orderBy('tanggal')
+            ->orderBy('row_number')
+            ->get();
+
+        if ($items->isEmpty()) {
+            return back()->with(
+                'error',
+                'Tidak ada data transaksi yang perlu diekspor.'
+            );
+        }
+
+        $rows = [];
+        $kodeDipakai = [];
+        $nomorPerBulan = [];
+
+        foreach ($items as $item) {
+            if (
+                !$item->tanggal ||
+                !$item->id_sumber_dana ||
+                !$item->id_tujuan_transaksi ||
+                !$item->nominal ||
+                $item->nominal < 1 ||
+                trim($item->keterangan ?? '') === ''
+            ) {
+                throw ValidationException::withMessages([
+                    'import' => 'Data pada baris Excel nomor '
+                        . $item->row_number
+                        . ' belum lengkap. Periksa tanggal, sumber dana, tujuan, nominal, dan keterangan.',
+                ]);
+            }
+
+            $akunSumber = Akun::find($item->id_sumber_dana);
+            $akunTujuan = Akun::find($item->id_tujuan_transaksi);
+
+            if (!$akunSumber || !$akunTujuan) {
+                throw ValidationException::withMessages([
+                    'import' => 'Sumber dana atau tujuan pada baris Excel nomor '
+                        . $item->row_number
+                        . ' tidak ditemukan.',
+                ]);
+            }
+
+            $tanggal = Carbon::parse($item->tanggal);
+            $kodeBukti = trim((string) $item->kode_bukti);
+
+            // Jika kode bukti kosong, buat kode BPU otomatis.
+            if ($kodeBukti === '') {
+                $periode = $tanggal->format('Y-m');
+
+                if (!isset($nomorPerBulan[$periode])) {
+                    $nomorPerBulan[$periode] = Transaksi::whereYear(
+                        'date',
+                        $tanggal->year
+                    )->whereMonth(
+                            'date',
+                            $tanggal->month
+                        )->count() + 1;
+                }
+
+                do {
+                    $kodeBukti = 'BPU' . str_pad(
+                        $nomorPerBulan[$periode]++,
+                        3,
+                        '0',
+                        STR_PAD_LEFT
+                    );
+                } while (
+                    Transaksi::where('kode_bukti', $kodeBukti)->exists()
+                    || isset($kodeDipakai[mb_strtolower($kodeBukti)])
+                );
+            }
+
+            $kodeKey = mb_strtolower($kodeBukti);
+
+            if (isset($kodeDipakai[$kodeKey])) {
+                throw ValidationException::withMessages([
+                    'import' => 'Kode bukti ' . $kodeBukti
+                        . ' terduplikasi dalam draft rekonsiliasi.',
+                ]);
+            }
+
+            if (Transaksi::where('kode_bukti', $kodeBukti)->exists()) {
+                throw ValidationException::withMessages([
+                    'import' => 'Kode bukti ' . $kodeBukti
+                        . ' sudah ada di database.',
+                ]);
+            }
+
+            $kodeDipakai[$kodeKey] = true;
+
+            // Susunan harus tetap 8 kolom sesuai template Import Transaksi.
+            $rows[] = [
+                $tanggal->format('d/m/Y'),
+                $kodeBukti,
+                $akunSumber->name,
+                $akunTujuan->name,
+                (int) $item->nominal,
+                $item->keterangan,
+                '',
+                '',
+            ];
+        }
+
+        return Excel::download(
+            new RekonsiliasiTransaksiExport($rows),
+            'Hasil-Rekonsiliasi-' . $draft->id . '.xlsx'
+        );
+    }
+    
+}
+
+
+
+
+
+/*public function simpanTransaksi(ImportDraft $draft)
     {
         $items = $draft->items()
             ->where('is_checked', false)
@@ -752,7 +821,58 @@ class ImportDraftController extends Controller
             //->route('import-drafts.show', $draft)
             ->route('import-drafts.index')
             ->with('success', 'Data draft berhasil disimpan ke transaksi.');
-    }
+    }*/
 
+/*public function autosaveTujuan(Request $request, ImportDraft $draft)
+    {
+        $validated = $request->validate([
+            'jenis' => ['required', 'in:tujuan,sumber_dana'],
+            'nilai' => ['required', 'integer', 'exists:akun,id'],
+            'item_ids' => ['required', 'array', 'min:1'],
+            'item_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
 
-}
+        $akun = Akun::findOrFail($validated['nilai']);
+
+        // Validasi jenis akun sesuai dropdown yang dipilih.
+        if (
+            $validated['jenis'] === 'sumber_dana'
+            && !in_array($akun->jenis_akun, ['Owner', 'Kas'])
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Akun tersebut bukan sumber dana yang valid.',
+            ], 422);
+        }
+
+        $items = $draft->items()
+            ->whereIn('id', $validated['item_ids'])
+            ->get();
+
+        abort_if(
+            $items->count() !== count($validated['item_ids']),
+            422,
+            'Data transaksi tidak valid.'
+        );
+
+        foreach ($items as $item) {
+            if ($validated['jenis'] === 'tujuan') {
+                $item->update([
+                    'id_tujuan_transaksi' => $akun->id,
+                    'tujuan' => $akun->name,
+                ]);
+            } else {
+                $item->update([
+                    'id_sumber_dana' => $akun->id,
+                    'sumber_dana' => $akun->name,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Pilihan berhasil disimpan.',
+            'jenis' => $validated['jenis'],
+            'nama' => $akun->name,
+        ]);
+    }*/
