@@ -16,6 +16,7 @@ use App\Exports\LaporanTransaksiExport;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Storage;
 use ZipArchive;
+use Illuminate\Support\Collection;
 
 class LaporanCon extends Controller
 {
@@ -131,6 +132,353 @@ class LaporanCon extends Controller
         $pdf = Pdf::loadView('laporan.pdf-bos', $data)->setPaper('a4', 'portrait');
         return $pdf->stream("Laporan-Pengeluaran-Bos-{$tahun}-{$bulan}.pdf");
     }
+
+
+    private function transaksiUntukPdf($tahun, $bulan)
+    {
+        abort_unless(
+            is_numeric($tahun) &&
+            (int) $tahun >= 2000 &&
+            (int) $tahun <= 2100 &&
+            is_numeric($bulan) &&
+            (int) $bulan >= 1 &&
+            (int) $bulan <= 12,
+            404
+        );
+
+        $akun = Akun::findOrFail(request()->query('akun'));
+
+        $transaksi = Transaksi::with(['sumberDana', 'tujuanTransaksi'])
+            ->where(function ($query) use ($akun) {
+                $query->where('id_sumber_dana', $akun->id)
+                    ->orWhere('id_tujuan_transaksi', $akun->id);
+            })
+            ->whereYear('date', $tahun)
+            ->whereMonth('date', $bulan)
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get();
+
+        $saldoBerjalan = 0;
+
+        $transaksi->each(function ($item) use ($akun, &$saldoBerjalan) {
+            if ($item->id_tujuan_transaksi == $akun->id) {
+                $saldoBerjalan += $item->nominal;
+            }
+
+            if ($item->id_sumber_dana == $akun->id) {
+                $saldoBerjalan -= $item->nominal;
+            }
+
+            $item->saldo_berjalan = $saldoBerjalan;
+        });
+
+        return [$akun, $transaksi];
+    }
+
+    private function dataPdfTransaksi(
+        $akun,
+        $transaksi,
+        $tahun,
+        $bulan
+    ) {
+        return [
+            'title' => $akun->jenis_akun === 'Owner'
+                ? 'Laporan Pengeluaran Bos'
+                : 'Laporan Kas ' . $akun->name,
+
+            'tahun' => $tahun,
+            'bulan' => $bulan,
+
+            'namaBulan' => Carbon::createFromDate(
+                $tahun,
+                $bulan,
+                1
+            )->locale('id')->translatedFormat('F Y'),
+
+            'akun' => $akun,
+            'transaksi' => $transaksi,
+
+            'totalMasuk' => $transaksi
+                ->where('id_tujuan_transaksi', $akun->id)
+                ->sum('nominal'),
+
+            'totalKeluar' => $transaksi
+                ->where('id_sumber_dana', $akun->id)
+                ->sum('nominal'),
+
+            'saldoAkhir' => $transaksi->isNotEmpty()
+                ? $transaksi->last()->saldo_berjalan
+                : 0,
+        ];
+    }
+
+    private function jumlahHalamanPdfTransaksi(
+        $akun,
+        $transaksi,
+        $tahun,
+        $bulan
+    ) {
+        $data = $this->dataPdfTransaksi(
+            $akun,
+            $transaksi,
+            $tahun,
+            $bulan
+        );
+
+        $pdf = Pdf::loadView('laporan.pdf-bos', $data)
+            ->setPaper('a4', 'portrait');
+
+        $pdf->render();
+
+        $jumlahHalaman = $pdf->getDomPDF()
+            ->getCanvas()
+            ->get_page_count();
+
+        unset($pdf);
+
+        gc_collect_cycles();
+
+        return $jumlahHalaman;
+    }
+
+    private function pecahTransaksiPdf(
+        $akun,
+        $transaksi,
+        $tahun,
+        $bulan
+    ) {
+        if ($transaksi->isEmpty()) {
+            return [];
+        }
+
+        $jumlahHalaman = $this->jumlahHalamanPdfTransaksi(
+            $akun,
+            $transaksi,
+            $tahun,
+            $bulan
+        );
+
+        if ($jumlahHalaman <= 20) {
+            return [$transaksi];
+        }
+
+        if ($transaksi->count() === 1) {
+            abort(
+                422,
+                'Satu transaksi menghasilkan lebih dari 20 halaman PDF. Periksa uraian transaksi tersebut.'
+            );
+        }
+
+        $tengah = (int) ceil($transaksi->count() / 2);
+
+        $bagianKiri = $transaksi->take($tengah)->values();
+        $bagianKanan = $transaksi->slice($tengah)->values();
+
+        return array_merge(
+            $this->pecahTransaksiPdf(
+                $akun,
+                $bagianKiri,
+                $tahun,
+                $bulan
+            ),
+            $this->pecahTransaksiPdf(
+                $akun,
+                $bagianKanan,
+                $tahun,
+                $bulan
+            )
+        );
+    }
+
+    public function indexPdfTransaksi($tahun, $bulan)
+    {
+        [$akun, $transaksi] = $this->transaksiUntukPdf(
+            $tahun,
+            $bulan
+        );
+
+        if ($transaksi->isEmpty()) {
+            return back()->withErrors([
+                'pdf' => 'Tidak ada transaksi pada periode ini.',
+            ]);
+        }
+
+        $bagian = $this->pecahTransaksiPdf(
+            $akun,
+            $transaksi,
+            $tahun,
+            $bulan
+        );
+
+        return view('laporan.pdf-part-index', [
+            'title' => 'PDF Transaksi',
+            'jenis' => 'transaksi',
+            'akun' => $akun,
+            'tahun' => $tahun,
+            'bulan' => $bulan,
+            'namaBulan' => Carbon::createFromDate(
+                $tahun,
+                $bulan,
+                1
+            )->locale('id')->translatedFormat('F Y'),
+            'jumlahPart' => count($bagian),
+        ]);
+    }
+
+    public function exportPdfTransaksi($tahun, $bulan, $part)
+    {
+        abort_unless(
+            is_numeric($part) && (int) $part >= 1,
+            404
+        );
+
+        [$akun, $transaksi] = $this->transaksiUntukPdf(
+            $tahun,
+            $bulan
+        );
+
+        $bagian = $this->pecahTransaksiPdf(
+            $akun,
+            $transaksi,
+            $tahun,
+            $bulan
+        );
+
+        $index = (int) $part - 1;
+
+        abort_unless(isset($bagian[$index]), 404);
+
+        $data = $this->dataPdfTransaksi(
+            $akun,
+            $bagian[$index],
+            $tahun,
+            $bulan
+        );
+
+        $pdf = Pdf::loadView('laporan.pdf-bos', $data)
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream(
+            "Laporan-Transaksi-{$bulan}-{$tahun}-Part-{$part}.pdf"
+        );
+    }
+
+    private function lampiranUntukPdf($tahun, $bulan)
+    {
+        abort_unless(
+            is_numeric($tahun) &&
+            (int) $tahun >= 2000 &&
+            (int) $tahun <= 2100 &&
+            is_numeric($bulan) &&
+            (int) $bulan >= 1 &&
+            (int) $bulan <= 12,
+            404
+        );
+
+        $akun = Akun::findOrFail(request()->query('akun'));
+
+        $transaksi = Transaksi::where(function ($query) use ($akun) {
+            $query->where('id_sumber_dana', $akun->id)
+                ->orWhere('id_tujuan_transaksi', $akun->id);
+        })
+            ->whereYear('date', $tahun)
+            ->whereMonth('date', $bulan)
+            ->where(function ($query) {
+                $query->whereNotNull('bukti')
+                    ->orWhereNotNull('bukti_nota');
+            })
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get()
+            ->filter(function ($item) {
+                return (
+                    $item->bukti &&
+                    Storage::disk('public')->exists($item->bukti)
+                ) || (
+                    $item->bukti_nota &&
+                    Storage::disk('public')->exists($item->bukti_nota)
+                );
+            })
+            ->values();
+
+        return [$akun, $transaksi];
+    }
+
+    public function indexPdfLampiran($tahun, $bulan)
+    {
+        [$akun, $transaksi] = $this->lampiranUntukPdf(
+            $tahun,
+            $bulan
+        );
+
+        if ($transaksi->isEmpty()) {
+            return back()->withErrors([
+                'pdf' => 'Tidak ada file lampiran pada periode ini.',
+            ]);
+        }
+
+        $jumlahPart = (int) ceil($transaksi->count() / 40);
+
+        return view('laporan.pdf-part-index', [
+            'title' => 'PDF Lampiran',
+            'jenis' => 'lampiran',
+            'akun' => $akun,
+            'tahun' => $tahun,
+            'bulan' => $bulan,
+            'namaBulan' => Carbon::createFromDate(
+                $tahun,
+                $bulan,
+                1
+            )->locale('id')->translatedFormat('F Y'),
+            'jumlahPart' => $jumlahPart,
+        ]);
+    }
+
+    public function exportPdfLampiran($tahun, $bulan, $part)
+    {
+        abort_unless(
+            is_numeric($part) && (int) $part >= 1,
+            404
+        );
+
+        [$akun, $transaksi] = $this->lampiranUntukPdf(
+            $tahun,
+            $bulan
+        );
+
+        $bagian = $transaksi->chunk(40)->values();
+
+        $index = (int) $part - 1;
+
+        abort_unless(isset($bagian[$index]), 404);
+
+        $data = [
+            'title' => $akun->jenis_akun === 'Owner'
+                ? 'Lampiran Pengeluaran Bos'
+                : 'Lampiran Kas ' . $akun->name,
+
+            'tahun' => $tahun,
+            'bulan' => $bulan,
+
+            'namaBulan' => Carbon::createFromDate(
+                $tahun,
+                $bulan,
+                1
+            )->locale('id')->translatedFormat('F Y'),
+
+            'akun' => $akun,
+            'transaksi' => $bagian[$index],
+        ];
+
+        $pdf = Pdf::loadView('laporan.lampiran-pdf', $data)
+            ->setPaper('a4', 'portrait');
+
+        return $pdf->stream(
+            "Laporan-Lampiran-{$bulan}-{$tahun}-Part-{$part}.pdf"
+        );
+    }
+
 
     private function transaksiUntukExport($tahun, $bulan)
     {

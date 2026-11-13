@@ -48,8 +48,30 @@ Route::middleware('auth')->group(function () {
     //LaporanCon
     Route::get('/laporan', [LaporanCon::class, 'index'])->name('laporan.index');
 
-    Route::get('/laporan/bos/{tahun}/{bulan}', [LaporanCon::class, 'bos'])
-        ->name('laporan.bos.pdf');
+    // Route::get('/laporan/bos/{tahun}/{bulan}', [LaporanCon::class, 'bos'])
+    //    ->name('laporan.bos.pdf');
+
+    // PDF Transaksi
+    Route::get('/laporan/bos/{tahun}/{bulan}/transaksi', [
+        LaporanCon::class,
+        'indexPdfTransaksi',
+    ])->name('laporan.bos.transaksi.index');
+
+    Route::get('/laporan/bos/{tahun}/{bulan}/transaksi/{part}', [
+        LaporanCon::class,
+        'exportPdfTransaksi',
+    ])->name('laporan.bos.transaksi.download');
+
+    // PDF Lampiran
+    Route::get('/laporan/bos/{tahun}/{bulan}/lampiran', [
+        LaporanCon::class,
+        'indexPdfLampiran',
+    ])->name('laporan.bos.lampiran.index');
+
+    Route::get('/laporan/bos/{tahun}/{bulan}/lampiran/{part}', [
+        LaporanCon::class,
+        'exportPdfLampiran',
+    ])->name('laporan.bos.lampiran.download');
 
     Route::get('/laporan/bos/{tahun}/{bulan}/excel', [
         LaporanCon::class,

@@ -95,18 +95,29 @@
                                                                                             {{ $nama }}
                                                                                         </h6>
 
-                                                                                        <div class="btn-group"
-                                                                                            role="group">
-                                                                                            <a href="{{ route('laporan.bos.pdf', [
+
+                                                                                        <div
+                                                                                            class="d-flex flex-wrap gap-2">
+                                                                                            <a href="{{ route('laporan.bos.transaksi.index', [
                                                                                                 'tahun' => $tahun,
                                                                                                 'bulan' => $nomor,
                                                                                                 'akun' => $akun->id,
                                                                                             ]) }}"
-                                                                                                target="_blank"
                                                                                                 class="btn btn-outline-danger btn-sm">
                                                                                                 <i
                                                                                                     class="bi bi-file-pdf"></i>
-                                                                                                PDF
+                                                                                                PDF Transaksi
+                                                                                            </a>
+
+                                                                                            <a href="{{ route('laporan.bos.lampiran.index', [
+                                                                                                'tahun' => $tahun,
+                                                                                                'bulan' => $nomor,
+                                                                                                'akun' => $akun->id,
+                                                                                            ]) }}"
+                                                                                                class="btn btn-outline-danger btn-sm">
+                                                                                                <i
+                                                                                                    class="bi bi-images"></i>
+                                                                                                PDF Lampiran
                                                                                             </a>
 
                                                                                             <a href="{{ route('laporan.bos.excel', [
@@ -131,6 +142,7 @@
                                                                                                 ZIP
                                                                                             </a>
                                                                                         </div>
+
                                                                                     </div>
                                                                                 </div>
                                                                             @else
@@ -244,7 +256,7 @@
                                                         </div>
                                                     </div>
                                                 </div>
-                            @empty
+                        @empty
                                                 <p class="text-muted">
                                                     Belum ada transaksi Pengeluaran Bos.
                                                 </p>
