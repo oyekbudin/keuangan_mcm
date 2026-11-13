@@ -52,12 +52,18 @@ Route::middleware('auth')->group(function () {
     //    ->name('laporan.bos.pdf');
 
     // PDF Transaksi
-    Route::get('/laporan/bos/{tahun}/{bulan}/transaksi', [
+    /*Route::get('/laporan/bos/{tahun}/{bulan}/transaksi', [
         LaporanCon::class,
         'indexPdfTransaksi',
     ])->name('laporan.bos.transaksi.index');
 
     Route::get('/laporan/bos/{tahun}/{bulan}/transaksi/{part}', [
+        LaporanCon::class,
+        'exportPdfTransaksi',
+    ])->name('laporan.bos.transaksi.download')*/
+
+    // PDF Transaksi
+    Route::get('/laporan/bos/{tahun}/{bulan}/transaksi', [
         LaporanCon::class,
         'exportPdfTransaksi',
     ])->name('laporan.bos.transaksi.download');

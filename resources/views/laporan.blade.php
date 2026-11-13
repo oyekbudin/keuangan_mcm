@@ -79,8 +79,6 @@
                                                                     @foreach ($namaBulan as $nomor => $nama)
                                                                         <div class="col-6 col-md-3">
                                                                             @if (in_array($nomor, $bulanTersedia))
-                                                                                
-
                                                                                 <div class="card h-100">
                                                                                     <div class="card-body p-3">
                                                                                         <h6 class="mb-3">
@@ -90,11 +88,12 @@
 
                                                                                         <div
                                                                                             class="d-flex flex-wrap gap-2">
-                                                                                            <a href="{{ route('laporan.bos.transaksi.index', [
+                                                                                            <a href="{{ route('laporan.bos.transaksi.download', [
                                                                                                 'tahun' => $tahun,
                                                                                                 'bulan' => $nomor,
                                                                                                 'akun' => $akun->id,
                                                                                             ]) }}"
+                                                                                                target="_blank"
                                                                                                 class="btn btn-outline-danger btn-sm">
                                                                                                 <i
                                                                                                     class="bi bi-file-pdf"></i>

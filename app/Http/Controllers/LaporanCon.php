@@ -213,85 +213,7 @@ class LaporanCon extends Controller
         ];
     }
 
-    private function jumlahHalamanPdfTransaksi(
-        $akun,
-        $transaksi,
-        $tahun,
-        $bulan
-    ) {
-        $data = $this->dataPdfTransaksi(
-            $akun,
-            $transaksi,
-            $tahun,
-            $bulan
-        );
-
-        $pdf = Pdf::loadView('laporan.pdf-bos', $data)
-            ->setPaper('a4', 'portrait');
-
-        $pdf->render();
-
-        $jumlahHalaman = $pdf->getDomPDF()
-            ->getCanvas()
-            ->get_page_count();
-
-        unset($pdf);
-
-        gc_collect_cycles();
-
-        return $jumlahHalaman;
-    }
-
-    private function pecahTransaksiPdf(
-        $akun,
-        $transaksi,
-        $tahun,
-        $bulan
-    ) {
-        if ($transaksi->isEmpty()) {
-            return [];
-        }
-
-        $jumlahHalaman = $this->jumlahHalamanPdfTransaksi(
-            $akun,
-            $transaksi,
-            $tahun,
-            $bulan
-        );
-
-        if ($jumlahHalaman <= 20) {
-            return [$transaksi];
-        }
-
-        if ($transaksi->count() === 1) {
-            abort(
-                422,
-                'Satu transaksi menghasilkan lebih dari 20 halaman PDF. Periksa uraian transaksi tersebut.'
-            );
-        }
-
-        $tengah = (int) ceil($transaksi->count() / 2);
-
-        $bagianKiri = $transaksi->take($tengah)->values();
-        $bagianKanan = $transaksi->slice($tengah)->values();
-
-        return array_merge(
-            $this->pecahTransaksiPdf(
-                $akun,
-                $bagianKiri,
-                $tahun,
-                $bulan
-            ),
-            $this->pecahTransaksiPdf(
-                $akun,
-                $bagianKanan,
-                $tahun,
-                $bulan
-            )
-        );
-    }
-
-    public function indexPdfTransaksi($tahun, $bulan)
+    public function exportPdfTransaksi($tahun, $bulan)
     {
         [$akun, $transaksi] = $this->transaksiUntukPdf(
             $tahun,
@@ -304,54 +226,9 @@ class LaporanCon extends Controller
             ]);
         }
 
-        $bagian = $this->pecahTransaksiPdf(
-            $akun,
-            $transaksi,
-            $tahun,
-            $bulan
-        );
-
-        return view('laporan.pdf-part-index', [
-            'title' => 'PDF Transaksi',
-            'jenis' => 'transaksi',
-            'akun' => $akun,
-            'tahun' => $tahun,
-            'bulan' => $bulan,
-            'namaBulan' => Carbon::createFromDate(
-                $tahun,
-                $bulan,
-                1
-            )->locale('id')->translatedFormat('F Y'),
-            'jumlahPart' => count($bagian),
-        ]);
-    }
-
-    public function exportPdfTransaksi($tahun, $bulan, $part)
-    {
-        abort_unless(
-            is_numeric($part) && (int) $part >= 1,
-            404
-        );
-
-        [$akun, $transaksi] = $this->transaksiUntukPdf(
-            $tahun,
-            $bulan
-        );
-
-        $bagian = $this->pecahTransaksiPdf(
-            $akun,
-            $transaksi,
-            $tahun,
-            $bulan
-        );
-
-        $index = (int) $part - 1;
-
-        abort_unless(isset($bagian[$index]), 404);
-
         $data = $this->dataPdfTransaksi(
             $akun,
-            $bagian[$index],
+            $transaksi,
             $tahun,
             $bulan
         );
@@ -360,7 +237,7 @@ class LaporanCon extends Controller
             ->setPaper('a4', 'portrait');
 
         return $pdf->stream(
-            "Laporan-Transaksi-{$bulan}-{$tahun}-Part-{$part}.pdf"
+            "Laporan-Transaksi-{$bulan}-{$tahun}.pdf"
         );
     }
 
